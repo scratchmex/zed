@@ -7,10 +7,11 @@ use editor::{
     scroll::{Autoscroll, ScrollOffset},
 };
 use gpui::{
-    App, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Render, SharedString, Styled,
-    Subscription, div, prelude::*,
+    App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Render, SharedString,
+    Styled, Subscription, Window, div, prelude::*,
 };
 use language::Buffer;
+use picker::QueryMode;
 use text::{Bias, Point};
 use theme::ActiveTheme;
 use ui::prelude::*;
@@ -26,6 +27,7 @@ pub struct GoToLine {
     active_editor: Entity<Editor>,
     active_buffer: Entity<Buffer>,
     current_text: SharedString,
+    query_mode: QueryMode,
     prev_scroll_position: Option<gpui::Point<ScrollOffset>>,
     current_line: u32,
     _subscriptions: Vec<Subscription>,
@@ -68,7 +70,7 @@ impl GoToLine {
                 };
                 workspace.update(cx, |workspace, cx| {
                     workspace.toggle_modal(window, cx, move |window, cx| {
-                        GoToLine::new(editor_handle, buffer, window, cx)
+                        GoToLine::new(editor_handle, buffer, QueryMode::Standalone, window, cx)
                     });
                 })
             })
@@ -78,6 +80,7 @@ impl GoToLine {
     pub fn new(
         active_editor: Entity<Editor>,
         active_buffer: Entity<Buffer>,
+        query_mode: QueryMode,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -145,6 +148,7 @@ impl GoToLine {
             active_editor,
             active_buffer,
             current_text: current_text.into(),
+            query_mode: query_mode,
             prev_scroll_position: Some(scroll_position),
             current_line: line,
             _subscriptions: vec![line_editor_change, cx.on_release_in(window, Self::release)],
@@ -235,8 +239,16 @@ impl GoToLine {
             .buffer_point_to_anchor(&self.active_buffer, target_point, cx)
     }
 
+    fn query(&self, cx: &App) -> String {
+        let query = self.line_editor.read(cx).text(cx);
+        match self.query_mode {
+            QueryMode::Standalone => query,
+            QueryMode::Prefixed(prefix) => query.strip_prefix(prefix).unwrap_or(&query).to_owned(),
+        }
+    }
+
     fn relative_line_from_query(&self, cx: &App) -> Option<i32> {
-        let input = self.line_editor.read(cx).text(cx);
+        let input = self.query(cx);
         let trimmed = input.trim();
 
         let mut last_direction_char: Option<char> = None;
@@ -271,7 +283,7 @@ impl GoToLine {
     }
 
     fn line_and_char_from_query(&self, cx: &App) -> Option<(u32, Option<u32>)> {
-        let input = self.line_editor.read(cx).text(cx);
+        let input = self.query(cx);
         let mut components = input
             .splitn(2, FILE_ROW_COLUMN_DELIMITER)
             .map(str::trim)

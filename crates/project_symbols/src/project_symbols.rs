@@ -5,7 +5,7 @@ use gpui::{
     TextStyle, WeakEntity, Window, relative,
 };
 use ordered_float::OrderedFloat;
-use picker::{Picker, PickerDelegate, PreviewUpdate};
+use picker::{Picker, PickerDelegate, PreviewUpdate, QueryMode};
 use project::{Project, Symbol, lsp_store::SymbolLocation};
 use settings::Settings;
 use std::{cmp::Reverse, sync::Arc};
@@ -25,15 +25,27 @@ pub fn init(cx: &mut App) {
                     let project = workspace.project().clone();
                     let handle = cx.entity().downgrade();
                     workspace.toggle_modal(window, cx, move |window, cx| {
-                        let delegate = ProjectSymbolsDelegate::new(handle, project.clone());
-                        let preview = picker_preview::editor_preview(project, window, cx);
-                        Picker::uniform_list_with_preview(delegate, preview, window, cx)
+                        new(handle, project, QueryMode::Standalone, window, cx)
                     })
                 },
             );
         },
     )
     .detach();
+}
+
+fn new(
+    workspace: WeakEntity<Workspace>,
+    project: Entity<Project>,
+    query_mode: QueryMode,
+    window: &mut Window,
+    cx: &mut Context<Picker<ProjectSymbolsDelegate>>,
+) -> Picker<ProjectSymbolsDelegate> {
+    let delegate = ProjectSymbolsDelegate::new(workspace, project.clone());
+    let preview = picker_preview::editor_preview(project, window, cx);
+    let mut picker = Picker::uniform_list_with_preview(delegate, preview, window, cx);
+    picker.set_query_mode(query_mode);
+    picker
 }
 
 pub type ProjectSymbols = Entity<Picker<ProjectSymbolsDelegate>>;

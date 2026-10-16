@@ -10,7 +10,7 @@ use gpui::{
     ParentElement, Point, Rems, Render, Styled, StyledText, Task, WeakEntity, Window, div, rems,
 };
 use language::{OffsetRangeExt, Outline, OutlineItem, OutlineSearchEntry};
-use picker::{MatchLocation, Picker, PickerDelegate, PreviewUpdate};
+use picker::{MatchLocation, Picker, PickerDelegate, PreviewUpdate, QueryMode};
 use theme::ActiveTheme;
 use ui::{ListItem, ListItemSpacing, prelude::*, utils::buffer_text_style};
 use workspace::{DismissDecision, ModalView};
@@ -34,13 +34,16 @@ pub fn toggle(
     window: &mut Window,
     cx: &mut App,
 ) {
+    // TODO: will be received as param when we impl unified palette
+    let query_mode = QueryMode::Standalone;
     let Some(workspace) = editor.read(cx).workspace() else {
         return;
     };
     if workspace.read(cx).active_modal::<OutlineView>(cx).is_some() {
+        // close
         workspace.update(cx, |workspace, cx| {
             workspace.toggle_modal(window, cx, |window, cx| {
-                OutlineView::new(Outline::new(Vec::new()), editor.clone(), window, cx)
+                OutlineView::new(Outline::new(Vec::new()), editor.clone(), query_mode, window, cx)
             });
         });
         return;
@@ -53,14 +56,14 @@ pub fn toggle(
     window
         .spawn(cx, async move |cx| {
             let items = task.await;
-            if items.is_empty() {
+            if items.is_empty() && query_mode == QueryMode::Standalone {
                 return;
             }
             cx.update(|window, cx| {
                 let outline = Outline::new(items);
                 workspace.update(cx, |workspace, cx| {
                     workspace.toggle_modal(window, cx, |window, cx| {
-                        OutlineView::new(outline, editor, window, cx)
+                        OutlineView::new(outline, editor, query_mode, window, cx)
                     });
                 });
             })
@@ -169,18 +172,20 @@ impl OutlineView {
     fn new(
         outline: Outline<Anchor>,
         editor: Entity<Editor>,
+        query_mode: QueryMode,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> OutlineView {
         let project = editor.read(cx).project().cloned();
         let delegate = OutlineViewDelegate::new(cx.entity().downgrade(), outline, editor, cx);
         let picker = cx.new(|cx| {
-            let picker = if let Some(project) = project {
+            let mut picker = if let Some(project) = project {
                 let preview = picker_preview::editor_preview(project, window, cx);
                 Picker::uniform_list_with_preview(delegate, preview, window, cx)
             } else {
                 Picker::uniform_list(delegate, window, cx)
             };
+            picker.set_query_mode(query_mode);
             picker
                 .max_height(Rems::from_pixels(
                     window.viewport_size().height * 0.75,

@@ -11,7 +11,7 @@ use gpui::{
     Modifiers, Subscription, Task, TaskExt as _, WeakEntity, actions,
 };
 use language::Buffer;
-use picker::Picker;
+use picker::{Picker, QueryMode};
 
 use project::ProjectPath;
 use settings::SeedQuerySetting;
@@ -133,7 +133,7 @@ impl TextFinder {
         workspace.register_action(|workspace, _: &Toggle, window, cx| {
             let Some(text_picker) = workspace.active_modal::<Self>(cx) else {
                 let seed_query = Self::seed_query(workspace, window, cx);
-                Self::open(seed_query, window, cx).detach();
+                Self::open(seed_query, QueryMode::Standalone, window, cx).detach();
                 return;
             };
 
@@ -161,7 +161,14 @@ impl TextFinder {
                     remove_project_search_tab(project_search_item_id, workspace, window, cx);
                     let workspace_id = workspace.database_id();
                     workspace.toggle_modal(window, cx, |window, cx| {
-                        Self::new(delegate, None, workspace_id, window, cx)
+                        Self::new(
+                            delegate,
+                            None,
+                            QueryMode::Standalone,
+                            workspace_id,
+                            window,
+                            cx,
+                        )
                     });
                 })
                 .ok();
@@ -394,6 +401,7 @@ impl TextFinder {
 
     pub(crate) fn open(
         seed_query: Option<SearchSeed>,
+        query_mode: QueryMode,
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) -> Task<()> {
@@ -409,7 +417,7 @@ impl TextFinder {
                 .update_in(cx, |workspace, window, cx| {
                     let workspace_id = workspace.database_id();
                     workspace.toggle_modal(window, cx, |window, cx| {
-                        Self::new(delegate, seed_query, workspace_id, window, cx)
+                        Self::new(delegate, seed_query, query_mode, workspace_id, window, cx)
                     });
                 })
                 .ok();
@@ -419,6 +427,7 @@ impl TextFinder {
     fn new(
         delegate: Delegate,
         seed_query: Option<SearchSeed>,
+        query_mode: QueryMode,
         workspace_id: Option<WorkspaceId>,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -429,13 +438,15 @@ impl TextFinder {
         let query_editor = cx.new(|cx| Editor::single_line(window, cx));
         let erased_query_editor = query_editor.update(cx, |editor, cx| editor.erased(cx));
         let picker = cx.new(|cx| {
-            Picker::list_with_preview_and_query_editor(
+            let mut p = Picker::list_with_preview_and_query_editor(
                 delegate,
                 preview,
                 erased_query_editor,
                 window,
                 cx,
-            )
+            );
+            p.set_query_mode(query_mode);
+            p
         });
         let picker_weak = picker.downgrade();
         let picker_focus_handle = picker.focus_handle(cx);
@@ -587,7 +598,7 @@ mod tests {
         };
         workspace
             .update_in(cx, |_, window, cx| {
-                TextFinder::open(Some(seed_query), window, cx)
+                TextFinder::open(Some(seed_query), QueryMode::Standalone, window, cx)
             })
             .await;
 
@@ -633,7 +644,7 @@ mod tests {
         };
         workspace
             .update_in(cx, |_, window, cx| {
-                TextFinder::open(Some(seed_query), window, cx)
+                TextFinder::open(Some(seed_query), QueryMode::Standalone, window, cx)
             })
             .await;
         workspace.update_in(cx, |workspace, window, cx| {
@@ -649,7 +660,9 @@ mod tests {
             Some(QuerySeed::Query(query)) if query == initial_query
         ));
         workspace
-            .update_in(cx, |_, window, cx| TextFinder::open(seed_query, window, cx))
+            .update_in(cx, |_, window, cx| {
+                TextFinder::open(seed_query, QueryMode::Standalone, window, cx)
+            })
             .await;
 
         let picker = workspace.update(cx, |workspace, cx| {
@@ -711,7 +724,7 @@ mod tests {
         });
         workspace
             .update_in(cx, |_, window, cx| {
-                TextFinder::open(Some(seed_query), window, cx)
+                TextFinder::open(Some(seed_query), QueryMode::Standalone, window, cx)
             })
             .await;
         cx.run_until_parked();

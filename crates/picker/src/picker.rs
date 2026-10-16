@@ -72,6 +72,10 @@ pub enum QueryMode {
 
 impl QueryMode {
     pub const COMMAND_PALETTE: Self = Self::Prefixed('>');
+    pub const PROJECT_SYMBOLS: Self = Self::Prefixed('#');
+    pub const OUTLINE: Self = Self::Prefixed('@');
+    pub const GO_TO_LINE: Self = Self::Prefixed(':');
+    pub const TEXT_FINDER: Self = Self::Prefixed('%');
 
     fn query(self, query: &str) -> Cow<'_, str> {
         match self {

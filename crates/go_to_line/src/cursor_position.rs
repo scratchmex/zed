@@ -1,5 +1,6 @@
 use editor::{Editor, EditorEvent, MBTextSummary, MultiBufferSnapshot};
 use gpui::{App, Entity, FocusHandle, Focusable, Styled, Subscription, Task, WeakEntity};
+use picker::QueryMode;
 use settings::{RegisterSetting, Settings};
 use std::{fmt::Write, num::NonZeroU32, time::Duration};
 use text::{Point, Selection};
@@ -239,7 +240,7 @@ impl Render for CursorPosition {
                                     && let Some(buffer) = editor.read(cx).active_buffer(cx)
                                 {
                                     workspace.toggle_modal(window, cx, |window, cx| {
-                                        crate::GoToLine::new(editor, buffer, window, cx)
+                                        crate::GoToLine::new(editor, buffer, QueryMode::Standalone, window, cx)
                                     })
                                 }
                             });
